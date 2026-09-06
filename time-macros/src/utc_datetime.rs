@@ -32,13 +32,7 @@ impl UtcDateTime {
         let minutes = self.time.minute as i64 * Second::per_t::<i64>(Minute);
         let seconds = self.time.second as i64;
 
-        let nanoseconds = if self.date.year < 1970 {
-            1_000_000_000 - self.time.nanosecond
-        } else {
-            self.time.nanosecond
-        };
-
-        (days + hours + minutes + seconds, nanoseconds)
+        (days + hours + minutes + seconds, self.time.nanosecond)
     }
 }
 

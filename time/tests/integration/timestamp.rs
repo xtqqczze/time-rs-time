@@ -112,6 +112,13 @@ fn checked_to_offset(#[case] ts: Timestamp, #[case] offset: UtcOffset, #[case] e
 #[rstest]
 #[case(timestamp!(0), UtcDateTime::UNIX_EPOCH)]
 #[case(timestamp!(1_546_398_245), utc_datetime!(2019-01-02 3:04:05))]
+#[case(timestamp!(1969-12-31 23:59:59), utc_datetime!(1969-12-31 23:59:59))]
+#[case(timestamp!(1969-12-31 23:59:58.5), utc_datetime!(1969-12-31 23:59:58.5))]
+#[case(timestamp!(1969-12-31 23:59:59.25), utc_datetime!(1969-12-31 23:59:59.25))]
+#[case(timestamp!(1969-12-31 23:59:59.75), utc_datetime!(1969-12-31 23:59:59.75))]
+#[case(timestamp!(1969-01-01 0:00), utc_datetime!(1969-01-01 0:00))]
+#[case(timestamp!(-0400-01-01 0:00), utc_datetime!(-0400-01-01 0:00))]
+#[case(timestamp!(-0400-01-01 0:00:00.25), utc_datetime!(-0400-01-01 0:00:00.25))]
 fn to_utc(#[case] ts: Timestamp, #[case] expected: UtcDateTime) {
     assert_eq!(ts.to_utc(), expected);
 }
@@ -121,6 +128,10 @@ fn to_utc(#[case] ts: Timestamp, #[case] expected: UtcDateTime) {
 #[case(timestamp!(-1), -1)]
 #[case(timestamp!(1_546_398_245), 1_546_398_245)]
 #[case(timestamp!(1_546_398_245.006_007_008), 1_546_398_245)]
+#[case(timestamp!(-0.5), -1)]
+#[case(timestamp!(-1.25), -2)]
+#[case(timestamp!(1969-12-31 23:59:59.25), -1)]
+#[case(timestamp!(1969-12-31 23:59:58.5), -2)]
 fn as_seconds(#[case] ts: Timestamp, #[case] expected: i64) {
     assert_eq!(ts.as_seconds(), expected);
 }
@@ -131,6 +142,8 @@ fn as_seconds(#[case] ts: Timestamp, #[case] expected: i64) {
 #[case(timestamp!(-1), -1_000)]
 #[case(timestamp!(1_546_398_245.006), 1_546_398_245_006)]
 #[case(timestamp!(1_546_398_245.006_007_008), 1_546_398_245_006)]
+#[case(timestamp!(1969-12-31 23:59:59.25), -750)]
+#[case(timestamp!(1969-12-31 23:59:59.999), -1)]
 fn as_milliseconds(#[case] ts: Timestamp, #[case] expected: i64) {
     assert_eq!(ts.as_milliseconds(), expected);
 }
@@ -141,6 +154,7 @@ fn as_milliseconds(#[case] ts: Timestamp, #[case] expected: i64) {
 #[case(timestamp!(-1), -1_000_000)]
 #[case(timestamp!(1_546_398_245.006_007), 1_546_398_245_006_007)]
 #[case(timestamp!(1_546_398_245.006_007_008), 1_546_398_245_006_007)]
+#[case(timestamp!(1969-12-31 23:59:59.25), -750_000)]
 fn as_microseconds(#[case] ts: Timestamp, #[case] expected: i128) {
     assert_eq!(ts.as_microseconds(), expected);
 }
@@ -150,6 +164,8 @@ fn as_microseconds(#[case] ts: Timestamp, #[case] expected: i128) {
 #[case(timestamp!(1), 1_000_000_000)]
 #[case(timestamp!(-1), -1_000_000_000)]
 #[case(timestamp!(1_546_398_245.006_007_008), 1_546_398_245_006_007_008)]
+#[case(timestamp!(1969-12-31 23:59:59.25), -750_000_000)]
+#[case(timestamp!(-1.25), -1_250_000_000)]
 fn as_nanoseconds(#[case] ts: Timestamp, #[case] expected: i128) {
     assert_eq!(ts.as_nanoseconds(), expected);
 }
@@ -158,6 +174,8 @@ fn as_nanoseconds(#[case] ts: Timestamp, #[case] expected: i128) {
 #[case(timestamp!(0), date!(1970-01-01))]
 #[case(timestamp!(1_546_398_245), date!(2019-01-02))]
 #[case(timestamp!(-1), date!(1969-12-31))]
+#[case(timestamp!(-0.5), date!(1969-12-31))]
+#[case(timestamp!(1969-12-31 23:59:59.25), date!(1969-12-31))]
 fn date(#[case] ts: Timestamp, #[case] expected: Date) {
     assert_eq!(ts.date(), expected);
 }
@@ -165,6 +183,8 @@ fn date(#[case] ts: Timestamp, #[case] expected: Date) {
 #[rstest]
 #[case(timestamp!(0), time!(0:00))]
 #[case(timestamp!(1_546_398_245), time!(3:04:05))]
+#[case(timestamp!(-0.5), time!(23:59:59.5))]
+#[case(timestamp!(1969-12-31 23:59:59.25), time!(23:59:59.25))]
 fn time_(#[case] ts: Timestamp, #[case] expected: Time) {
     assert_eq!(ts.time(), expected);
 }
@@ -257,6 +277,13 @@ fn weekday(#[case] ts: Timestamp, #[case] expected: Weekday) {
 #[case(timestamp!(518_400), Wednesday)]
 #[case(timestamp!(22_118_400), Monday)] // 256 days past epoch; > i8::MAX
 #[case(timestamp!(-22_118_400), Sunday)] // 256 days before epoch; < i8::MIN
+#[case(timestamp!(-1), Wednesday)]
+#[case(timestamp!(-0.5), Wednesday)]
+#[case(timestamp!(-86_400), Wednesday)]
+#[case(timestamp!(-86_400.000_000_001), Tuesday)]
+#[case(timestamp!(-86_399.999_999_999), Wednesday)]
+#[case(timestamp!(86_399.999_999_999), Thursday)]
+#[case(timestamp!(86_400.000_000_001), Friday)]
 fn weekday_exhaustive(#[case] ts: Timestamp, #[case] expected: Weekday) {
     assert_eq!(ts.weekday(), expected);
 }
@@ -814,6 +841,11 @@ fn now() {
 #[rstest]
 #[case(timestamp!(0), 2_440_588)]
 #[case(timestamp!(1_546_398_245), 2_458_486)]
+#[case(timestamp!(-0.5), 2_440_587)]
+#[case(timestamp!(1969-12-31 23:59:59.25), 2_440_587)]
+#[case(timestamp!(-86_400.000_000_001), 2_440_586)]
+#[case(timestamp!(86_399.999_999_999), 2_440_588)]
+#[case(timestamp!(86_400.000_000_001), 2_440_589)]
 fn to_julian_day(#[case] ts: Timestamp, #[case] expected: i32) {
     assert_eq!(ts.to_julian_day(), expected);
 }
@@ -834,6 +866,7 @@ fn unix_timestamp_format() {
 #[rstest]
 #[case(utc_datetime!(1970-01-01 0:00), timestamp!(0))]
 #[case(utc_datetime!(2019-01-02 3:04:05), timestamp!(1_546_398_245))]
+#[case(utc_datetime!(1969-12-31 23:59:59.25), timestamp!(1969-12-31 23:59:59.25))]
 fn from_utc_datetime_into_timestamp(#[case] source: UtcDateTime, #[case] expected: Timestamp) {
     assert_eq!(Timestamp::from(source), expected);
 }
@@ -841,6 +874,7 @@ fn from_utc_datetime_into_timestamp(#[case] source: UtcDateTime, #[case] expecte
 #[rstest]
 #[case(timestamp!(0), utc_datetime!(1970-01-01 0:00))]
 #[case(timestamp!(1_546_398_245), utc_datetime!(2019-01-02 3:04:05))]
+#[case(timestamp!(1969-12-31 23:59:59.25), utc_datetime!(1969-12-31 23:59:59.25))]
 fn from_timestamp_into_utc_datetime(#[case] source: Timestamp, #[case] expected: UtcDateTime) {
     assert_eq!(UtcDateTime::from(source), expected);
 }
