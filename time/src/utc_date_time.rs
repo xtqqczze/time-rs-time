@@ -17,6 +17,8 @@ use crate::PrivateMethod;
 use crate::date::{MAX_YEAR, MIN_YEAR};
 #[cfg(feature = "formatting")]
 use crate::formatting::Formattable;
+#[cfg(feature = "formatting")]
+use crate::internal_macros::try_likely_ok;
 use crate::internal_macros::{carry, cascade, const_try, const_try_opt, div_floor, ensure_ranged};
 use crate::num_fmt::str_from_raw_parts;
 #[cfg(feature = "parsing")]
@@ -1169,7 +1171,17 @@ impl UtcDateTime {
         output: &mut (impl io::Write + ?Sized),
         format: &(impl Formattable + ?Sized),
     ) -> Result<usize, error::Format> {
-        format.format_into(output, &self, &mut Default::default(), PrivateMethod)
+        let mut output = crate::formatting::Output {
+            bytes_written: 0,
+            output,
+        };
+        try_likely_ok!(format.format_into(
+            &mut output,
+            &self,
+            &mut Default::default(),
+            PrivateMethod,
+        ));
+        Ok(output.bytes_written)
     }
 
     /// Format the `UtcDateTime` using the provided [format

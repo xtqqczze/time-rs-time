@@ -17,6 +17,8 @@ use powerfmt::smart_display::{self, FormatterOptions, Metadata, SmartDisplay};
 use crate::PrivateMethod;
 #[cfg(feature = "formatting")]
 use crate::formatting::Formattable;
+#[cfg(feature = "formatting")]
+use crate::internal_macros::try_likely_ok;
 use crate::internal_macros::{const_try, const_try_opt};
 use crate::num_fmt::str_from_raw_parts;
 #[cfg(feature = "parsing")]
@@ -1051,7 +1053,17 @@ impl PlainDateTime {
         output: &mut (impl io::Write + ?Sized),
         format: &(impl Formattable + ?Sized),
     ) -> Result<usize, error::Format> {
-        format.format_into(output, &self, &mut Default::default(), PrivateMethod)
+        let mut output = crate::formatting::Output {
+            bytes_written: 0,
+            output,
+        };
+        try_likely_ok!(format.format_into(
+            &mut output,
+            &self,
+            &mut Default::default(),
+            PrivateMethod,
+        ));
+        Ok(output.bytes_written)
     }
 
     /// Format the `PlainDateTime` using the provided [format

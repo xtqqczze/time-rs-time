@@ -15,65 +15,75 @@ use crate::format_description::well_known::{Iso8601, Rfc2822, Rfc3339};
 use crate::format_description::{
     BorrowedFormatItem, Component, FormatDescriptionV3, OwnedFormatItem,
 };
-use crate::formatting::{
-    ComponentProvider, MONTH_NAMES, WEEKDAY_NAMES, format_four_digits_pad_zero, format_two_digits,
-    iso8601, write, write_bytes, write_if_else,
-};
+use crate::formatting::{ComponentProvider, MONTH_NAMES, Output, WEEKDAY_NAMES};
 use crate::internal_macros::try_likely_ok;
 use crate::{PrivateMethod, error, num_fmt};
 
 macro_rules! fmt_component_match {
-    ($self:expr, $output:ident, $value:ident, $state:ident, $($extra:tt)*) => {
+    (
+        $self:expr,
+        $output:ident,
+        $value:ident,
+        $state:ident,
+        $($extra:tt)*
+    ) => {
         match $self {
             Self::Day(modifier) if V::SUPPLIES_DATE => {
-                fmt_day($output, $value.day($state), *modifier).map_err(Into::into)
+                $output.fmt_day($value.day($state), *modifier).map_err(Into::into)
             }
             Self::MonthShort(modifier) if V::SUPPLIES_DATE => {
-                fmt_month_short($output, $value.month($state), *modifier).map_err(Into::into)
+                $output.fmt_month_short($value.month($state), *modifier).map_err(Into::into)
             }
             Self::MonthLong(modifier) if V::SUPPLIES_DATE => {
-                fmt_month_long($output, $value.month($state), *modifier).map_err(Into::into)
+                $output.fmt_month_long($value.month($state), *modifier).map_err(Into::into)
             }
             Self::MonthNumerical(modifier) if V::SUPPLIES_DATE => {
-                fmt_month_numerical($output, $value.month($state), *modifier).map_err(Into::into)
+                $output.fmt_month_numerical($value.month($state), *modifier).map_err(Into::into)
             }
             Self::Ordinal(modifier) if V::SUPPLIES_DATE => {
-                fmt_ordinal($output, $value.ordinal($state), *modifier).map_err(Into::into)
+                $output.fmt_ordinal($value.ordinal($state), *modifier).map_err(Into::into)
             }
             Self::WeekdayShort(modifier) if V::SUPPLIES_DATE => {
-                fmt_weekday_short($output, $value.weekday($state), *modifier).map_err(Into::into)
+                $output.fmt_weekday_short($value.weekday($state), *modifier).map_err(Into::into)
             }
             Self::WeekdayLong(modifier) if V::SUPPLIES_DATE => {
-                fmt_weekday_long($output, $value.weekday($state), *modifier).map_err(Into::into)
+                $output.fmt_weekday_long($value.weekday($state), *modifier).map_err(Into::into)
             }
             Self::WeekdaySunday(modifier) if V::SUPPLIES_DATE => {
-                fmt_weekday_sunday($output, $value.weekday($state), *modifier).map_err(Into::into)
+                $output.fmt_weekday_sunday($value.weekday($state), *modifier).map_err(Into::into)
             }
             Self::WeekdayMonday(modifier) if V::SUPPLIES_DATE => {
-                fmt_weekday_monday($output, $value.weekday($state), *modifier).map_err(Into::into)
+                $output.fmt_weekday_monday($value.weekday($state), *modifier).map_err(Into::into)
             }
             Self::WeekNumberIso(modifier) if V::SUPPLIES_DATE => {
-                fmt_week_number_iso($output, $value.iso_week_number($state), *modifier)
-                    .map_err(Into::into)
+                $output.fmt_week_number_iso(
+                    $value.iso_week_number($state),
+                    *modifier,
+                )
+                .map_err(Into::into)
             }
             Self::WeekNumberSunday(modifier) if V::SUPPLIES_DATE => {
-                fmt_week_number_sunday($output, $value.sunday_based_week($state), *modifier)
-                    .map_err(Into::into)
+                $output.fmt_week_number_sunday(
+                    $value.sunday_based_week($state),
+                    *modifier,
+                )
+                .map_err(Into::into)
             }
             Self::WeekNumberMonday(modifier) if V::SUPPLIES_DATE => {
-                fmt_week_number_monday($output, $value.monday_based_week($state), *modifier)
-                    .map_err(Into::into)
+                $output.fmt_week_number_monday(
+                    $value.monday_based_week($state),
+                    *modifier,
+                )
+                .map_err(Into::into)
             }
             Self::CalendarYearFullExtendedRange(modifier) if V::SUPPLIES_DATE => {
-                fmt_calendar_year_full_extended_range(
-                    $output,
+                $output.fmt_calendar_year_full_extended_range(
                     $value.calendar_year($state),
                     *modifier
                 ).map_err(Into::into)
             }
             Self::CalendarYearFullStandardRange(modifier) if V::SUPPLIES_DATE => {
-                fmt_calendar_year_full_standard_range(
-                    $output,
+                $output.fmt_calendar_year_full_standard_range(
                     try_likely_ok!(
                         $value
                             .calendar_year($state)
@@ -86,12 +96,14 @@ macro_rules! fmt_component_match {
                 .map_err(Into::into)
             }
             Self::IsoYearFullExtendedRange(modifier) if V::SUPPLIES_DATE => {
-                fmt_iso_year_full_extended_range($output, $value.iso_year($state), *modifier)
-                    .map_err(Into::into)
+                $output.fmt_iso_year_full_extended_range(
+                    $value.iso_year($state),
+                    *modifier,
+                )
+                .map_err(Into::into)
             }
             Self::IsoYearFullStandardRange(modifier) if V::SUPPLIES_DATE => {
-                fmt_iso_year_full_standard_range(
-                    $output,
+                $output.fmt_iso_year_full_standard_range(
                     try_likely_ok!(
                         $value
                             .iso_year($state)
@@ -107,8 +119,7 @@ macro_rules! fmt_component_match {
                 let year = $value.calendar_year($state);
                 // Safety: Given the range of `year`, the range of the century is `-9_999..=9_999`.
                 let century = unsafe { ri16::new_unchecked((year.get() / 100).truncate()) };
-                fmt_calendar_year_century_extended_range(
-                    $output,
+                $output.fmt_calendar_year_century_extended_range(
                     century,
                     year.is_negative(),
                     *modifier,
@@ -122,8 +133,7 @@ macro_rules! fmt_component_match {
                 let year = unsafe {
                     ri16::<-9_999, 9_999>::new_unchecked((year.get() / 100).truncate())
                 };
-                fmt_calendar_year_century_standard_range(
-                    $output,
+                $output.fmt_calendar_year_century_standard_range(
                     year.narrow::<-99, 99>()
                         .ok_or_else(|| error::ComponentRange::conditional("year"))?
                         .into(),
@@ -137,8 +147,12 @@ macro_rules! fmt_component_match {
                 let is_negative = year.is_negative();
                 // Safety: Given the range of `year`, the range of the century is `-9_999..=9_999`.
                 let century = unsafe { ri16::new_unchecked((year.get() / 100).truncate()) };
-                fmt_iso_year_century_extended_range($output, century, is_negative, *modifier)
-                    .map_err(Into::into)
+                $output.fmt_iso_year_century_extended_range(
+                    century,
+                    is_negative,
+                    *modifier,
+                )
+                .map_err(Into::into)
             }
             Self::IsoYearCenturyStandardRange(modifier) if V::SUPPLIES_DATE => {
                 let year = $value.iso_year($state);
@@ -147,8 +161,7 @@ macro_rules! fmt_component_match {
                 let year = unsafe {
                     ri16::<-9_999, 9_999>::new_unchecked((year.get() / 100).truncate())
                 };
-                fmt_iso_year_century_standard_range(
-                    $output,
+                $output.fmt_iso_year_century_standard_range(
                     year.narrow::<-99, 99>()
                         .ok_or_else(|| error::ComponentRange::conditional("year"))?
                         .into(),
@@ -165,7 +178,8 @@ macro_rules! fmt_component_match {
                         ($value.calendar_year($state).get().unsigned_abs() % 100).truncate(),
                     )
                 };
-                fmt_calendar_year_last_two($output, last_two, *modifier).map_err(Into::into)
+                $output.fmt_calendar_year_last_two(last_two, *modifier)
+                    .map_err(Into::into)
             }
             Self::IsoYearLastTwo(modifier) if V::SUPPLIES_DATE => {
                 // Safety: Modulus of 100 followed by `.unsigned_abs()` guarantees that the $value
@@ -175,71 +189,72 @@ macro_rules! fmt_component_match {
                         ($value.iso_year($state).get().unsigned_abs() % 100).truncate(),
                     )
                 };
-                fmt_iso_year_last_two($output, last_two, *modifier).map_err(Into::into)
+                $output.fmt_iso_year_last_two(last_two, *modifier).map_err(Into::into)
             }
             Self::Hour12(modifier) if V::SUPPLIES_TIME => {
-                fmt_hour_12($output, $value.hour($state), *modifier).map_err(Into::into)
+                $output.fmt_hour_12($value.hour($state), *modifier).map_err(Into::into)
             }
             Self::Hour24(modifier) if V::SUPPLIES_TIME => {
-                fmt_hour_24($output, $value.hour($state), *modifier).map_err(Into::into)
+                $output.fmt_hour_24($value.hour($state), *modifier).map_err(Into::into)
             }
             Self::Minute(modifier) if V::SUPPLIES_TIME => {
-                fmt_minute($output, $value.minute($state), *modifier).map_err(Into::into)
+                $output.fmt_minute($value.minute($state), *modifier).map_err(Into::into)
             }
             Self::Period(modifier) if V::SUPPLIES_TIME => {
-                fmt_period($output, $value.period($state), *modifier).map_err(Into::into)
+                $output.fmt_period($value.period($state), *modifier).map_err(Into::into)
             }
             Self::Second(modifier) if V::SUPPLIES_TIME => {
-                fmt_second($output, $value.second($state), *modifier).map_err(Into::into)
+                $output.fmt_second($value.second($state), *modifier).map_err(Into::into)
             }
             Self::Subsecond(modifier) if V::SUPPLIES_TIME => {
-                fmt_subsecond($output, $value.nanosecond($state), *modifier).map_err(Into::into)
+                $output.fmt_subsecond($value.nanosecond($state), *modifier).map_err(Into::into)
             }
-            Self::OffsetHour(modifier) if V::SUPPLIES_OFFSET => fmt_offset_hour(
-                $output,
-                $value.offset_is_negative($state),
-                $value.offset_hour($state),
-                *modifier,
-            )
-            .map_err(Into::into),
+            Self::OffsetHour(modifier) if V::SUPPLIES_OFFSET => {
+                $output.fmt_offset_hour(
+                    $value.offset_is_negative($state),
+                    $value.offset_hour($state),
+                    *modifier,
+                )
+                .map_err(Into::into)
+            }
             Self::OffsetMinute(modifier) if V::SUPPLIES_OFFSET => {
-                fmt_offset_minute($output, $value.offset_minute($state), *modifier)
+                $output.fmt_offset_minute($value.offset_minute($state), *modifier)
                     .map_err(Into::into)
             }
             Self::OffsetSecond(modifier) if V::SUPPLIES_OFFSET => {
-                fmt_offset_second($output, $value.offset_second($state), *modifier)
+                $output.fmt_offset_second($value.offset_second($state), *modifier)
                     .map_err(Into::into)
             }
-            Self::Ignore(_) => Ok(0),
+            Self::Ignore(_) => Ok(()),
             Self::UnixTimestampSecond(modifier) if V::SUPPLIES_TIMESTAMP => {
-                fmt_unix_timestamp_second($output, $value.unix_timestamp_seconds($state), *modifier)
-                    .map_err(Into::into)
+                $output.fmt_unix_timestamp_second(
+                    $value.unix_timestamp_seconds($state),
+                    *modifier,
+                )
+                .map_err(Into::into)
             }
             Self::UnixTimestampMillisecond(modifier) if V::SUPPLIES_TIMESTAMP => {
-                fmt_unix_timestamp_millisecond(
-                    $output,
+                $output.fmt_unix_timestamp_millisecond(
                     $value.unix_timestamp_milliseconds($state),
                     *modifier,
                 )
                 .map_err(Into::into)
             }
             Self::UnixTimestampMicrosecond(modifier) if V::SUPPLIES_TIMESTAMP => {
-                fmt_unix_timestamp_microsecond(
-                    $output,
+                $output.fmt_unix_timestamp_microsecond(
                     $value.unix_timestamp_microseconds($state),
                     *modifier,
                 )
                 .map_err(Into::into)
             }
             Self::UnixTimestampNanosecond(modifier) if V::SUPPLIES_TIMESTAMP => {
-                fmt_unix_timestamp_nanosecond(
-                    $output,
+                $output.fmt_unix_timestamp_nanosecond(
                     $value.unix_timestamp_nanoseconds($state),
                     *modifier,
                 )
                 .map_err(Into::into)
             }
-            Self::End(modifier::End { trailing_input: _ }) => Ok(0),
+            Self::End(modifier::End { trailing_input: _ }) => Ok(()),
             $($extra)*
         }
     };
@@ -275,14 +290,14 @@ mod sealed {
         reason = "irrelevant due to being a sealed trait"
     )]
     pub trait Sealed: ComputeMetadata {
-        /// Format the item into the provided output, returning the number of bytes written.
+        /// Format the item into the provided output.
         fn format_into<V>(
             &self,
-            output: &mut (impl io::Write + ?Sized),
+            output: &mut Output<impl io::Write + ?Sized>,
             value: &V,
             state: &mut V::State,
             _: PrivateMethod,
-        ) -> Result<usize, error::Format>
+        ) -> Result<(), error::Format>
         where
             V: ComponentProvider;
 
@@ -302,13 +317,16 @@ mod sealed {
                 guaranteed_utf8,
             } = self.compute_metadata(PrivateMethod);
 
-            let mut buf = Vec::with_capacity(max_bytes_needed);
-            try_likely_ok!(self.format_into(&mut buf, value, state, PrivateMethod));
+            let mut output = Output {
+                bytes_written: 0,
+                output: Vec::with_capacity(max_bytes_needed),
+            };
+            try_likely_ok!(self.format_into(&mut output, value, state, PrivateMethod));
             Ok(if guaranteed_utf8 {
                 // Safety: The output is guaranteed to be UTF-8.
-                unsafe { String::from_utf8_unchecked(buf) }
+                unsafe { String::from_utf8_unchecked(output.output) }
             } else {
-                String::from_utf8_lossy(&buf).into_owned()
+                String::from_utf8_lossy(&output.output).into_owned()
             })
         }
     }
@@ -323,11 +341,11 @@ impl sealed::Sealed for FormatDescriptionV3<'_> {
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
@@ -344,26 +362,28 @@ impl sealed::Sealed for FormatDescriptionV3Inner<'_> {
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
         use crate::formatting::*;
 
         fmt_component_match! { &self, output, value, state,
-            Self::BorrowedLiteral(literal) => {
-                write_bytes(output, literal.as_bytes()).map_err(Into::into)
-            }
+            Self::BorrowedLiteral(literal) => output.write(literal).map_err(Into::into),
             Self::BorrowedCompound(items) => {
-                let mut bytes = 0;
                 for item in *items {
-                    bytes += try_likely_ok!(item.format_into(output, value, state, PrivateMethod));
+                    try_likely_ok!(item.format_into(
+                        output,
+                        value,
+                        state,
+                        PrivateMethod,
+                    ));
                 }
-                Ok(bytes)
+                Ok(())
             }
             Self::BorrowedOptional {
                 format: should_format,
@@ -372,22 +392,26 @@ impl sealed::Sealed for FormatDescriptionV3Inner<'_> {
                 if *should_format {
                     item.format_into(output, value, state, PrivateMethod)
                 } else {
-                    Ok(0)
+                    Ok(())
                 }
             }
             Self::BorrowedFirst(items) => match items {
-                [] => Ok(0),
-                [item, ..] => item.format_into(output, value, state, PrivateMethod),
-            },
-            Self::OwnedLiteral(literal) => {
-                write_bytes(output, literal.as_bytes()).map_err(Into::into)
-            }
-            Self::OwnedCompound(items) => {
-                let mut bytes = 0;
-                for item in &**items {
-                    bytes += try_likely_ok!(item.format_into(output, value, state, PrivateMethod));
+                [] => Ok(()),
+                [item, ..] => {
+                    item.format_into(output, value, state, PrivateMethod)
                 }
-                Ok(bytes)
+            },
+            Self::OwnedLiteral(literal) => output.write(literal).map_err(Into::into),
+            Self::OwnedCompound(items) => {
+                for item in &**items {
+                    try_likely_ok!(item.format_into(
+                        output,
+                        value,
+                        state,
+                        PrivateMethod,
+                    ));
+                }
+                Ok(())
             }
             Self::OwnedOptional {
                 format: should_format,
@@ -396,12 +420,14 @@ impl sealed::Sealed for FormatDescriptionV3Inner<'_> {
                 if *should_format {
                     item.format_into(output, value, state, PrivateMethod)
                 } else {
-                    Ok(0)
+                    Ok(())
                 }
             }
             Self::OwnedFirst(items) => match &items[..] {
-                [] => Ok(0),
-                [item, ..] => item.format_into(output, value, state, PrivateMethod),
+                [] => Ok(()),
+                [item, ..] => {
+                    item.format_into(output, value, state, PrivateMethod)
+                }
             },
 
             // This is functionally the same as a wildcard arm, but it will cause an error
@@ -456,10 +482,10 @@ impl Component {
     #[allow(deprecated)]
     pub(crate) fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
@@ -546,32 +572,33 @@ impl sealed::Sealed for BorrowedFormatItem<'_> {
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
-        Ok(match *self {
+        match *self {
             #[expect(deprecated)]
-            Self::Literal(literal) => try_likely_ok!(write_bytes(output, literal)),
-            Self::StringLiteral(literal) => try_likely_ok!(write(output, literal)),
+            Self::Literal(literal) => try_likely_ok!(output.write_bytes(literal)),
+            Self::StringLiteral(literal) => try_likely_ok!(output.write(literal)),
             Self::Component(component) => component.format_into(output, value, state)?,
             Self::Compound(items) => {
-                try_likely_ok!((*items).format_into(output, value, state, PrivateMethod))
+                try_likely_ok!((*items).format_into(output, value, state, PrivateMethod));
             }
             Self::Optional(item) => {
-                try_likely_ok!((*item).format_into(output, value, state, PrivateMethod))
+                try_likely_ok!((*item).format_into(output, value, state, PrivateMethod));
             }
             Self::First(items) => match items {
-                [] => 0,
+                [] => {}
                 [item, ..] => {
-                    try_likely_ok!((*item).format_into(output, value, state, PrivateMethod))
+                    try_likely_ok!((*item).format_into(output, value, state, PrivateMethod));
                 }
             },
-        })
+        }
+        Ok(())
     }
 }
 
@@ -584,19 +611,18 @@ impl sealed::Sealed for [BorrowedFormatItem<'_>] {
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
-        let mut bytes = 0;
         for item in self.iter() {
-            bytes += try_likely_ok!(item.format_into(output, value, state, PrivateMethod));
+            try_likely_ok!(item.format_into(output, value, state, PrivateMethod));
         }
-        Ok(bytes)
+        Ok(())
     }
 }
 
@@ -609,24 +635,24 @@ impl sealed::Sealed for OwnedFormatItem {
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
         match self {
             #[expect(deprecated)]
-            Self::Literal(literal) => Ok(try_likely_ok!(write_bytes(output, literal))),
-            Self::StringLiteral(literal) => Ok(try_likely_ok!(write(output, literal))),
+            Self::Literal(literal) => output.write_bytes(literal).map_err(Into::into),
+            Self::StringLiteral(literal) => output.write(literal).map_err(Into::into),
             Self::Component(component) => FormatDescriptionV3Inner::<'_>::from(*component)
                 .format_into(output, value, state, PrivateMethod),
             Self::Compound(items) => (**items).format_into(output, value, state, PrivateMethod),
             Self::Optional(item) => (**item).format_into(output, value, state, PrivateMethod),
             Self::First(items) => match &**items {
-                [] => Ok(0),
+                [] => Ok(()),
                 [item, ..] => (*item).format_into(output, value, state, PrivateMethod),
             },
         }
@@ -642,19 +668,18 @@ impl sealed::Sealed for [OwnedFormatItem] {
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
-        let mut bytes = 0;
         for item in self.iter() {
-            bytes += try_likely_ok!(item.format_into(output, value, state, PrivateMethod));
+            try_likely_ok!(item.format_into(output, value, state, PrivateMethod));
         }
-        Ok(bytes)
+        Ok(())
     }
 }
 
@@ -670,11 +695,11 @@ where
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
@@ -691,11 +716,11 @@ where
 impl sealed::Sealed for Rfc2822 {
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
@@ -706,8 +731,6 @@ impl sealed::Sealed for Rfc2822 {
                  by this type"
             );
         }
-
-        let mut bytes = 0;
 
         if value.calendar_year(state).get() < 1900
             // The RFC requires years be exactly four digits.
@@ -722,70 +745,47 @@ impl sealed::Sealed for Rfc2822 {
         }
 
         // Safety: All weekday names are at least 3 bytes long.
-        bytes += try_likely_ok!(write(output, unsafe {
+        try_likely_ok!(output.write(unsafe {
             WEEKDAY_NAMES[value
                 .weekday(state)
                 .number_days_from_monday()
                 .widen::<usize>()]
             .get_unchecked(..3)
         }));
-        bytes += try_likely_ok!(write(output, ", "));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.day(state).expand(),
-            Padding::Zero
-        ));
-        bytes += try_likely_ok!(write(output, " "));
+        try_likely_ok!(output.write(", "));
+        try_likely_ok!(output.format_two_digits(value.day(state).expand(), Padding::Zero));
+        try_likely_ok!(output.write(" "));
         // Safety: All month names are at least 3 bytes long.
-        bytes += try_likely_ok!(write(output, unsafe {
+        try_likely_ok!(output.write(unsafe {
             MONTH_NAMES[u8::from(value.month(state)).widen::<usize>() - 1].get_unchecked(..3)
         }));
-        bytes += try_likely_ok!(write(output, " "));
+        try_likely_ok!(output.write(" "));
         // Safety: Years with five or more digits were rejected above. Likewise with negative years.
-        bytes += try_likely_ok!(format_four_digits_pad_zero(output, unsafe {
+        try_likely_ok!(output.format_four_digits_pad_zero(unsafe {
             ru16::new_unchecked(value.calendar_year(state).get().cast_unsigned().truncate())
         }));
-        bytes += try_likely_ok!(write(output, " "));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.hour(state).expand(),
-            Padding::Zero
-        ));
-        bytes += try_likely_ok!(write(output, ":"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.minute(state).expand(),
-            Padding::Zero
-        ));
-        bytes += try_likely_ok!(write(output, ":"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.second(state).expand(),
-            Padding::Zero
-        ));
-        bytes += try_likely_ok!(write(output, " "));
-        bytes += try_likely_ok!(write_if_else(
-            output,
-            value.offset_is_negative(state),
-            "-",
-            "+"
-        ));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
+        try_likely_ok!(output.write(" "));
+        try_likely_ok!(output.format_two_digits(value.hour(state).expand(), Padding::Zero));
+        try_likely_ok!(output.write(":"));
+        try_likely_ok!(output.format_two_digits(value.minute(state).expand(), Padding::Zero));
+        try_likely_ok!(output.write(":"));
+        try_likely_ok!(output.format_two_digits(value.second(state).expand(), Padding::Zero));
+        try_likely_ok!(output.write(" "));
+        try_likely_ok!(output.write_if_else(value.offset_is_negative(state), "-", "+"));
+        try_likely_ok!(output.format_two_digits(
             // Safety: `OffsetHours` is guaranteed to be in the range `-25..=25`, so the absolute
             // value is guaranteed to be in the range `0..=25`.
             unsafe { ru8::new_unchecked(value.offset_hour(state).get().unsigned_abs()) },
             Padding::Zero,
         ));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
+        try_likely_ok!(output.format_two_digits(
             // Safety: `OffsetMinutes` is guaranteed to be in the range `-59..=59`, so the absolute
             // value is guaranteed to be in the range `0..=59`.
             unsafe { ru8::new_unchecked(value.offset_minute(state).get().unsigned_abs()) },
             Padding::Zero,
         ));
 
-        Ok(bytes)
+        Ok(())
     }
 }
 
@@ -797,11 +797,11 @@ impl sealed::Sealed for Rfc2822 {
 impl sealed::Sealed for Rfc3339 {
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
@@ -814,7 +814,6 @@ impl sealed::Sealed for Rfc3339 {
         }
 
         let offset_hour = value.offset_hour(state);
-        let mut bytes = 0;
 
         if !(0..10_000).contains(&value.calendar_year(state).get()) {
             crate::hint::cold_path();
@@ -830,78 +829,51 @@ impl sealed::Sealed for Rfc3339 {
         }
 
         // Safety: Years outside this range were rejected above.
-        bytes += try_likely_ok!(format_four_digits_pad_zero(output, unsafe {
+        try_likely_ok!(output.format_four_digits_pad_zero(unsafe {
             ru16::new_unchecked(value.calendar_year(state).get().cast_unsigned().truncate())
         }));
-        bytes += try_likely_ok!(write(output, "-"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
+        try_likely_ok!(output.write("-"));
+        try_likely_ok!(output.format_two_digits(
             // Safety: `month` is guaranteed to be in the range `1..=12`.
             unsafe { ru8::new_unchecked(u8::from(value.month(state))) },
             Padding::Zero,
         ));
-        bytes += try_likely_ok!(write(output, "-"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.day(state).expand(),
-            Padding::Zero
-        ));
-        bytes += try_likely_ok!(write(output, "T"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.hour(state).expand(),
-            Padding::Zero
-        ));
-        bytes += try_likely_ok!(write(output, ":"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.minute(state).expand(),
-            Padding::Zero
-        ));
-        bytes += try_likely_ok!(write(output, ":"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
-            value.second(state).expand(),
-            Padding::Zero
-        ));
+        try_likely_ok!(output.write("-"));
+        try_likely_ok!(output.format_two_digits(value.day(state).expand(), Padding::Zero));
+        try_likely_ok!(output.write("T"));
+        try_likely_ok!(output.format_two_digits(value.hour(state).expand(), Padding::Zero));
+        try_likely_ok!(output.write(":"));
+        try_likely_ok!(output.format_two_digits(value.minute(state).expand(), Padding::Zero));
+        try_likely_ok!(output.write(":"));
+        try_likely_ok!(output.format_two_digits(value.second(state).expand(), Padding::Zero));
 
         let nanos = value.nanosecond(state);
         if nanos.get() != 0 {
-            bytes += try_likely_ok!(write(output, "."));
-            try_likely_ok!(write(
-                output,
-                &num_fmt::truncated_subsecond_from_nanos(nanos)
-            ));
+            try_likely_ok!(output.write("."));
+            try_likely_ok!(output.write(&num_fmt::truncated_subsecond_from_nanos(nanos)));
         }
 
         if value.offset_is_utc(state) {
-            bytes += try_likely_ok!(write(output, "Z"));
-            return Ok(bytes);
+            try_likely_ok!(output.write("Z"));
+            return Ok(());
         }
 
-        bytes += try_likely_ok!(write_if_else(
-            output,
-            value.offset_is_negative(state),
-            "-",
-            "+"
-        ));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
+        try_likely_ok!(output.write_if_else(value.offset_is_negative(state), "-", "+"));
+        try_likely_ok!(output.format_two_digits(
             // Safety: `OffsetHours` is guaranteed to be in the range `-23..=23`, so the absolute
             // value is guaranteed to be in the range `0..=23`.
             unsafe { ru8::new_unchecked(offset_hour.get().unsigned_abs()) },
             Padding::Zero,
         ));
-        bytes += try_likely_ok!(write(output, ":"));
-        bytes += try_likely_ok!(format_two_digits(
-            output,
+        try_likely_ok!(output.write(":"));
+        try_likely_ok!(output.format_two_digits(
             // Safety: `OffsetMinutes` is guaranteed to be in the range `-59..=59`, so the absolute
             // value is guaranteed to be in the range `0..=59`.
             unsafe { ru8::new_unchecked(value.offset_minute(state).get().unsigned_abs()) },
             Padding::Zero,
         ));
 
-        Ok(bytes)
+        Ok(())
     }
 }
 
@@ -914,16 +886,14 @@ impl<const CONFIG: EncodedConfig> sealed::Sealed for Iso8601<CONFIG> {
     #[inline]
     fn format_into<V>(
         &self,
-        output: &mut (impl io::Write + ?Sized),
+        output: &mut Output<impl io::Write + ?Sized>,
         value: &V,
         state: &mut V::State,
         _: PrivateMethod,
-    ) -> Result<usize, error::Format>
+    ) -> Result<(), error::Format>
     where
         V: ComponentProvider,
     {
-        let mut bytes = 0;
-
         const {
             assert!(
                 !Self::FORMAT_DATE || V::SUPPLIES_DATE,
@@ -947,15 +917,15 @@ impl<const CONFIG: EncodedConfig> sealed::Sealed for Iso8601<CONFIG> {
         }
 
         if Self::FORMAT_DATE {
-            bytes += try_likely_ok!(iso8601::format_date::<_, CONFIG>(output, value, state));
+            output.format_iso8601_date::<_, CONFIG>(value, state)?;
         }
         if Self::FORMAT_TIME {
-            bytes += try_likely_ok!(iso8601::format_time::<_, CONFIG>(output, value, state));
+            output.format_iso8601_time::<_, CONFIG>(value, state)?;
         }
         if Self::FORMAT_OFFSET {
-            bytes += try_likely_ok!(iso8601::format_offset::<_, CONFIG>(output, value, state));
+            output.format_iso8601_offset::<_, CONFIG>(value, state)?;
         }
 
-        Ok(bytes)
+        Ok(())
     }
 }

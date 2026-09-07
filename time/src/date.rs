@@ -18,6 +18,8 @@ use powerfmt::smart_display::{FormatterOptions, Metadata, SmartDisplay};
 use crate::PrivateMethod;
 #[cfg(feature = "formatting")]
 use crate::formatting::Formattable;
+#[cfg(feature = "formatting")]
+use crate::internal_macros::try_likely_ok;
 use crate::internal_macros::{const_try, const_try_opt, div_floor, ensure_ranged};
 use crate::iter::DateIter;
 use crate::num_fmt::{four_to_six_digits, str_from_raw_parts, two_digits_zero_padded};
@@ -1470,7 +1472,17 @@ impl Date {
         output: &mut (impl io::Write + ?Sized),
         format: &(impl Formattable + ?Sized),
     ) -> Result<usize, error::Format> {
-        format.format_into(output, &self, &mut Default::default(), PrivateMethod)
+        let mut output = crate::formatting::Output {
+            bytes_written: 0,
+            output,
+        };
+        try_likely_ok!(format.format_into(
+            &mut output,
+            &self,
+            &mut Default::default(),
+            PrivateMethod,
+        ));
+        Ok(output.bytes_written)
     }
 
     /// Format the `Date` using the provided [format description](crate::format_description).
