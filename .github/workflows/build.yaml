@@ -546,7 +546,7 @@ jobs:
           RUSTFLAGS: --cfg bench
 
       - name: Report formatting status
-        if: always() && (steps.check-formatting.conclusion == 'success' || steps.check-formatting.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.check-formatting.conclusion == 'success' || steps.check-formatting.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Formatting
@@ -563,7 +563,7 @@ jobs:
           RUSTDOCFLAGS: --cfg docsrs
 
       - name: Report documentation status
-        if: always() && (steps.generate-docs.conclusion == 'success' || steps.generate-docs.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.generate-docs.conclusion == 'success' || steps.generate-docs.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Documentation
@@ -583,7 +583,7 @@ jobs:
           RUSTFLAGS: --cfg bench
 
       - name: Report clippy status
-        if: always() && (steps.run-clippy.conclusion == 'success' || steps.run-clippy.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.run-clippy.conclusion == 'success' || steps.run-clippy.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Clippy
@@ -600,7 +600,7 @@ jobs:
           RUSTFLAGS: --cfg bench
 
       - name: Report benchmarks type-check status
-        if: always() && (steps.typecheck-benches.conclusion == 'success' || steps.typecheck-benches.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.typecheck-benches.conclusion == 'success' || steps.typecheck-benches.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Type-check benchmarks
@@ -616,7 +616,7 @@ jobs:
         run: cargo +stable test -p time --doc
 
       - name: Report doc test status
-        if: always() && (steps.doc-test-default.conclusion == 'success' || steps.doc-test-default.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.doc-test-default.conclusion == 'success' || steps.doc-test-default.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Doc tests (default features)
@@ -639,7 +639,7 @@ jobs:
           RUSTFLAGS: --cfg __ui_tests
 
       - name: Report code coverage status
-        if: always() && (steps.generate-coverage.conclusion == 'success' || steps.generate-coverage.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.generate-coverage.conclusion == 'success' || steps.generate-coverage.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Code coverage
@@ -666,7 +666,7 @@ jobs:
         run: cargo +stable build -p time --tests --all-features --target x86_64-pc-windows-gnu
 
       - name: Report cross-compilation status
-        if: always() && (steps.cross-build-tests.conclusion == 'success' || steps.cross-build-tests.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.cross-build-tests.conclusion == 'success' || steps.cross-build-tests.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Cross-compilation
@@ -683,7 +683,7 @@ jobs:
         wait: [trigger-deploy-docs]
 
       - name: Report publishing docs status
-        if: always() && (steps.trigger-deploy-docs.conclusion == 'success' || steps.trigger-deploy-docs.conclusion == 'failure')
+        if: always() && (github.event_name == 'push') && (steps.trigger-deploy-docs.conclusion == 'success' || steps.trigger-deploy-docs.conclusion == 'failure')
         uses: actions/github-script@v9
         env:
           CHECK_NAME: Publishing docs
