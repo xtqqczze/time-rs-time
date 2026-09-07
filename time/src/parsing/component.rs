@@ -599,7 +599,7 @@ pub(crate) fn parse_second(
 
 /// Parse the "period" component of a `Time`. Required if the hour is on a 12-hour clock.
 #[inline]
-pub(crate) fn parse_period(
+pub(crate) const fn parse_period(
     input: &[u8],
     modifiers: modifier::Period,
 ) -> Option<ParsedItem<'_, Period>> {
